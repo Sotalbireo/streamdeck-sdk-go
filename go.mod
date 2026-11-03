@@ -1,5 +1,5 @@
-module github.com/SkYNewZ/streamdeck-sdk
+module github.com/Sotalbireo/streamdeck-plugins/sdk-go
 
-go 1.17
+go 1.27
 
-require github.com/gorilla/websocket v1.5.3
+require github.com/coder/websocket v1.8.15

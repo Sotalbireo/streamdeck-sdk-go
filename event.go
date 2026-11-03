@@ -1,10 +1,16 @@
 package sdk
 
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+)
+
 // EventName is simply the name of the received event.
 type EventName string
 
 const (
-	// [Events Received] (https://docs.elgato.com/sdk/plugins/events-received)
+	// [Events Received] (https://docs.elgato.com/streamdeck/sdk/references/websocket/plugin)
 
 	// DidReceiveSettings Event received after calling the GetSettings API
 	// to retrieve the persistent data stored for the action.
@@ -14,22 +20,26 @@ const (
 	// to retrieve the global persistent data.
 	DidReceiveGlobalSettings EventName = "didReceiveGlobalSettings"
 
+	// DidReceiveResources Event received after calling the GetResources API,
+	// or when the resources of an action are changed (Stream Deck 7.1+).
+	DidReceiveResources EventName = "didReceiveResources"
+
 	// KeyDown When the user presses a key, the plugin will receive the KeyDown event.
 	KeyDown EventName = "keyDown"
 
 	// KeyUp When the user releases a key, the plugin will receive the keyUp event.
 	KeyUp EventName = "keyUp"
 
-	// When the user touches the display, the plugin will receive the touchTap event (SD+).
+	// TouchTap When the user touches the display, the plugin will receive the touchTap event (SD+).
 	TouchTap EventName = "touchTap"
 
-	// When the user presses the encoder down, the plugin will receive the dialDown event (SD+).
+	// DialDown When the user presses the encoder down, the plugin will receive the dialDown event (SD+).
 	DialDown EventName = "dialDown"
 
-	// When the user releases a pressed encoder, the plugin will receive the dialUp event (SD+).
+	// DialUp When the user releases a pressed encoder, the plugin will receive the dialUp event (SD+).
 	DialUp EventName = "dialUp"
 
-	// When the user rotates the encoder, the plugin will receive the dialRotate event (SD+).
+	// DialRotate When the user rotates the encoder, the plugin will receive the dialRotate event (SD+).
 	DialRotate EventName = "dialRotate"
 
 	// WillAppear When an instance of an action is displayed on the Stream Deck,
@@ -54,6 +64,10 @@ const (
 	// the plugin will receive a deviceDidDisconnect event.
 	DeviceDidDisconnect EventName = "deviceDidDisconnect"
 
+	// DeviceDidChange When the metadata (e.g. the name) or the size of a device changes,
+	// the plugin will receive a deviceDidChange event (Stream Deck 7.0+).
+	DeviceDidChange EventName = "deviceDidChange"
+
 	// ApplicationDidLaunch When a monitored application is launched,
 	// the plugin will be notified and will receive the applicationDidLaunch event.
 	ApplicationDidLaunch EventName = "applicationDidLaunch"
@@ -66,7 +80,7 @@ const (
 	// the plugin will be notified and will receive the systemDidWakeUp event.
 	SystemDidWakeUp EventName = "systemDidWakeUp"
 
-	// Occurs when Stream Deck receives a deep-link message intended for the plugin.
+	// DidReceiveDeepLink Occurs when Stream Deck receives a deep-link message intended for the plugin.
 	// The message is re-routed to the plugin, and provided as part of the payload.
 	DidReceiveDeepLink EventName = "didReceiveDeepLink"
 
@@ -81,9 +95,10 @@ const (
 	PropertyInspectorDidDisappear EventName = "propertyInspectorDidDisappear"
 
 	// SendToPlugin (from the Property Inspector) Send a payload to the plugin.
+	// The payload is an arbitrary json value, see ReceivedEvent.RawPayload.
 	SendToPlugin EventName = "sendToPlugin"
 
-	// [Events Sent] (https://docs.elgato.com/sdk/plugins/events-sent)
+	// [Events Sent] (https://docs.elgato.com/streamdeck/sdk/references/websocket/plugin)
 
 	// SetSettings Save data persistently for the action's instance.
 	SetSettings EventName = "setSettings"
@@ -97,6 +112,12 @@ const (
 	// GetGlobalSettings Request the global persistent data.
 	GetGlobalSettings EventName = "getGlobalSettings"
 
+	// SetResources Set the resources (files) embedded in the action's instance (Stream Deck 7.1+).
+	SetResources EventName = "setResources"
+
+	// GetResources Request the resources (files) embedded in the action's instance (Stream Deck 7.1+).
+	GetResources EventName = "getResources"
+
 	// OpenURL Open a URL in the default browser.
 	OpenURL EventName = "openUrl"
 
@@ -109,13 +130,13 @@ const (
 	// SetImage Dynamically change the image displayed by an instance of an action.
 	SetImage EventName = "setImage"
 
-	// Dynamically change properties of items on the Stream Deck + touch display.
+	// SetFeedback Dynamically change properties of items on the Stream Deck + touch display.
 	SetFeedback EventName = "setFeedback"
 
-	// Dynamically change the current layout for the Stream Deck + touch display.
+	// SetFeedbackLayout Dynamically change the current layout for the Stream Deck + touch display.
 	SetFeedbackLayout EventName = "setFeedbackLayout"
 
-	// Sets the trigger descriptions associated with an encoder (touch display + dial) action instance.
+	// SetTriggerDescription Sets the trigger descriptions associated with an encoder (touch display + dial) action instance.
 	// All descriptions are optional; when one or more descriptions are defined all descriptions are updated,
 	// with undefined values having their description hidden in Stream Deck.
 	// To reset the descriptions to the default values defined within the manifest,
@@ -139,10 +160,11 @@ const (
 )
 
 // Device used with StreamDeck.
+// See [DeviceType](https://docs.elgato.com/streamdeck/sdk/guides/devices).
 type Device uint8
 
 const (
-	// KESDSDKDeviceTypeStreamDeck Device type: Stream Deck.
+	// KESDSDKDeviceTypeStreamDeck Device type: Stream Deck (including Stream Deck Scissor Keys).
 	KESDSDKDeviceTypeStreamDeck Device = iota
 
 	// KESDSDKDeviceTypeStreamDeckMini Device type: Stream Deck Mini.
@@ -156,40 +178,78 @@ const (
 
 	// KESDSDKDeviceTypeCorsairGKeys Device type: Corsair G-Keys.
 	KESDSDKDeviceTypeCorsairGKeys
+
+	// KESDSDKDeviceTypeStreamDeckPedal Device type: Stream Deck Pedal.
+	KESDSDKDeviceTypeStreamDeckPedal
+
+	// KESDSDKDeviceTypeCorsairVoyager Device type: Corsair Voyager.
+	KESDSDKDeviceTypeCorsairVoyager
+
+	// KESDSDKDeviceTypeStreamDeckPlus Device type: Stream Deck +.
+	KESDSDKDeviceTypeStreamDeckPlus
+
+	// KESDSDKDeviceTypeSCUFController Device type: SCUF Controller.
+	KESDSDKDeviceTypeSCUFController
+
+	// KESDSDKDeviceTypeStreamDeckNeo Device type: Stream Deck Neo.
+	KESDSDKDeviceTypeStreamDeckNeo
+
+	// KESDSDKDeviceTypeStreamDeckStudio Device type: Stream Deck Studio.
+	KESDSDKDeviceTypeStreamDeckStudio
+
+	// KESDSDKDeviceTypeVirtualStreamDeck Device type: Virtual Stream Deck.
+	KESDSDKDeviceTypeVirtualStreamDeck
+
+	// KESDSDKDeviceTypeGalleon100SD Device type: Galleon 100 SD.
+	KESDSDKDeviceTypeGalleon100SD
+
+	// KESDSDKDeviceTypeStreamDeckPlusXL Device type: Stream Deck + XL.
+	KESDSDKDeviceTypeStreamDeckPlusXL
 )
 
 // Controller used with StreamDeck.
 type Controller string
 
 const (
+	// Encoder is a dial (with or without touch display).
 	Encoder Controller = "Encoder"
-	KeyPad  Controller = "KeyPad"
+
+	// Keypad is a key. The value sent by Stream Deck is "Keypad" (lower-case "p").
+	Keypad Controller = "Keypad"
+
+	// Neo is a Stream Deck Neo infobar (Stream Deck 7.6+).
+	Neo Controller = "Neo"
+
+	// KeyPad is the former spelling of Keypad.
+	//
+	// Deprecated: use Keypad, which has the value sent by Stream Deck.
+	KeyPad = Keypad
 )
 
 // Layouts used with StreamDeck.
 const (
 	// IconLayout is a layout that displays an icon on the Stream Deck + touch display.
-	// See [Icon Layout](https://docs.elgato.com/sdk/plugins/layouts-sd+#icon-layout-usdx1)
+	// See [Icon Layout](https://docs.elgato.com/streamdeck/sdk/references/layouts)
 	IconLayout = "$X1"
 
 	// CanvasLayout is a layout that displays a canvas on the Stream Deck + touch display.
-	// See [Canvas Layout](https://docs.elgato.com/sdk/plugins/layouts-sd+#canvas-layout-usda0)
+	// See [Canvas Layout](https://docs.elgato.com/streamdeck/sdk/references/layouts)
 	CanvasLayout = "$A0"
 
 	// ValueLayout is a layout that displays a value on the Stream Deck + touch display.
-	// See [Value Layout](https://docs.elgato.com/sdk/plugins/layouts-sd+#value-layout-usda1)
-	ValueLayout = "$A0"
+	// See [Value Layout](https://docs.elgato.com/streamdeck/sdk/references/layouts)
+	ValueLayout = "$A1"
 
 	// IndicatorLayout is a layout that displays an indicator on the Stream Deck + touch display.
-	// See [Indicator Layout](https://docs.elgato.com/sdk/plugins/layouts-sd+#indicator-layout-usdb1)
+	// See [Indicator Layout](https://docs.elgato.com/streamdeck/sdk/references/layouts)
 	IndicatorLayout = "$B1"
 
 	// GradientIndicatorLayout is a layout that displays a gradient indicator on the Stream Deck + touch display.
-	// See [Gradient Indicator Layout](https://docs.elgato.com/sdk/plugins/layouts-sd+#gradient-indicator-layout-usdb2)
+	// See [Gradient Indicator Layout](https://docs.elgato.com/streamdeck/sdk/references/layouts)
 	GradientIndicatorLayout = "$B2"
 
 	// DoubleIndicatorLayout is a layout that displays a double indicator on the Stream Deck + touch display.
-	// See [Double Indicator Layout](https://docs.elgato.com/sdk/plugins/layouts-sd+#double-indicator-layout-usdc1)
+	// See [Double Indicator Layout](https://docs.elgato.com/streamdeck/sdk/references/layouts)
 	DoubleIndicatorLayout = "$C1"
 )
 
@@ -208,7 +268,13 @@ type ReceivedEvent struct {
 	// An opaque value identifying the device.
 	Device string `json:"device"`
 
-	// A json object containing information about the device. Used on deviceDidConnect
+	// The identifier given to GetSettingsWithID, GetGlobalSettingsWithID or GetResourcesWithID
+	// when the event is the response to such a request.
+	// Empty when the event was not triggered by a request (e.g. settings changed in the property inspector).
+	// Used on events: didReceiveSettings, didReceiveGlobalSettings, didReceiveResources
+	ID string `json:"id"`
+
+	// A json object containing information about the device. Used on deviceDidConnect, deviceDidChange
 	DeviceInfo struct {
 		// The name of the device set by the user.
 		Name string `json:"name"`
@@ -223,17 +289,71 @@ type ReceivedEvent struct {
 		} `json:"size"`
 	} `json:"deviceInfo"`
 
-	// A json object containing context about received event
-	Payload *ReceivedEventPayload `json:"payload"`
+	// A json object containing context about received event.
+	//
+	// It is nil when the event has no payload, when the payload is not a json object,
+	// and for sendToPlugin whose payload is defined by the property inspector (use RawPayload).
+	Payload *ReceivedEventPayload `json:"-"`
+
+	// RawPayload is the payload as received, whatever its json type.
+	// Use DecodePayload to read it.
+	RawPayload json.RawMessage `json:"-"`
+}
+
+// receivedEventAlias has no methods, which avoids recursion in ReceivedEvent.UnmarshalJSON.
+type receivedEventAlias ReceivedEvent
+
+// UnmarshalJSON decodes an event received from Stream Deck.
+//
+// The payload of sendToPlugin is an arbitrary json value (string, number, array...),
+// so the payload is always kept as is in RawPayload, and is decoded into Payload
+// only for the events whose payload is defined by Stream Deck.
+// An unexpected payload therefore never prevents the event from being decoded.
+func (e *ReceivedEvent) UnmarshalJSON(data []byte) error {
+	aux := struct {
+		*receivedEventAlias
+		Payload json.RawMessage `json:"payload"`
+	}{receivedEventAlias: (*receivedEventAlias)(e)}
+
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+
+	e.Payload = nil
+	e.RawPayload = aux.Payload
+
+	raw := bytes.TrimSpace(aux.Payload)
+	if len(raw) == 0 || raw[0] != '{' || e.Event == SendToPlugin {
+		return nil
+	}
+
+	var p ReceivedEventPayload
+	if err := json.Unmarshal(raw, &p); err != nil {
+		return fmt.Errorf("decode payload of event [%s]: %w", e.Event, err)
+	}
+
+	e.Payload = &p
+
+	return nil
+}
+
+// DecodePayload decodes the raw payload of the event into v.
+func (e *ReceivedEvent) DecodePayload(v any) error {
+	if len(e.RawPayload) == 0 {
+		return fmt.Errorf("event [%s] has no payload", e.Event)
+	}
+
+	return json.Unmarshal(e.RawPayload, v)
 }
 
 // ReceivedEventPayload describes a payload received from StreamDeck SDK.
 type ReceivedEventPayload struct {
 	// This json object contains data that you can set and is stored persistently.
-	Settings map[string]interface{} `json:"settings"`
+	Settings map[string]any `json:"settings"`
 
-	// Contain value: 'Encoder' or 'KeyPad'.
-	// Used on events: touchTap, dialDown, dialUp, dialRotate
+	// Contain value: 'Encoder', 'Keypad' or 'Neo'.
+	// Used on events: keyDown, keyUp, touchTap, dialDown, dialUp, dialRotate,
+	// willAppear, willDisappear, titleParametersDidChange, didReceiveSettings, didReceiveResources
 	Controller Controller `json:"controller"`
 
 	// The coordinates of the action triggered.
@@ -288,6 +408,14 @@ type ReceivedEventPayload struct {
 	// The identifier of the application that has been launched.
 	// Used on events: applicationDidLaunch, applicationDidTerminate
 	Application string `json:"application"`
+
+	// The resources (name to file path) embedded in the action (Stream Deck 7.1+).
+	// Used on events that carry an action payload, e.g. didReceiveResources, willAppear
+	Resources map[string]string `json:"resources"`
+
+	// The deep-link URL, with the prefix omitted.
+	// Used on events: didReceiveDeepLink
+	URL string `json:"url"`
 }
 
 // Target is where you want to display the title.
@@ -322,8 +450,12 @@ type SendEvent struct {
 	// An opaque value identifying the device.
 	Device string `json:"device,omitempty"`
 
-	// A json object
-	Payload interface{} `json:"payload,omitempty"`
+	// An optional identifier of the request, sent back in the response event.
+	// Used on events: getSettings, getGlobalSettings, getResources
+	ID string `json:"id,omitempty"`
+
+	// A json value
+	Payload any `json:"payload,omitempty"`
 }
 
 // SendEventPayload describes a payload to send to StreamDeck SDK.
@@ -347,8 +479,9 @@ type SendEventPayload struct {
 	// A 0-based integer value representing the state of an action with multiple states.
 	// This is an optional parameter.
 	// If not specified, the title is set to all states.
+	// It is a pointer so that the state 0 is sent, which is required by setState.
 	// Used on events: setTitle, setImage, setState
-	State uint8 `json:"state,omitempty"`
+	State *uint8 `json:"state,omitempty"`
 
 	// The image to display encoded in base64 with the image format declared in the mime type (PNG, JPEG, BMP, ...).
 	// svg is also supported.
@@ -381,11 +514,11 @@ type SendEventSetTriggerDescriptionPayload struct {
 }
 
 // SendEventSetFeedbackPayload describes a payload for setFeedback event to send to StreamDeck SDK.
-type SendEventSetFeedbackPayload map[string]interface{}
+type SendEventSetFeedbackPayload map[string]any
 
 // SendEventSetFeedbackLayoutPayload describes a payload for setFeedbackLayout event to send to StreamDeck SDK.
 type SendEventSetFeedbackLayoutPayload struct {
 	// The layout to display on the Stream Deck + touch display.
-	// See [Layouts](https://docs.elgato.com/sdk/plugins/layouts-sd+)
+	// See [Layouts](https://docs.elgato.com/streamdeck/sdk/references/layouts)
 	Layout string `json:"layout"`
 }

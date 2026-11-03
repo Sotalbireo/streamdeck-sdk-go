@@ -5,7 +5,7 @@ import (
 )
 
 // Logf send formatted log message to StreamDeck SDK.
-func (s *StreamDeck) Logf(format string, a ...interface{}) {
+func (s *StreamDeck) Logf(format string, a ...any) {
 	s.send(&SendEvent{
 		Event:   LogMessage,
 		Payload: &SendEventPayload{Message: fmt.Sprintf(format, a...)},

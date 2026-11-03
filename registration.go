@@ -1,5 +1,13 @@
 package sdk
 
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+
+	"github.com/coder/websocket"
+)
+
 // Info is sent to the plugin on registration process.
 type Info struct {
 	Application struct {
@@ -13,14 +21,19 @@ type Info struct {
 		UUID    string `json:"uuid"`
 		Version string `json:"version"`
 	} `json:"plugin"`
-	DevicePixelRatio int `json:"devicePixelRatio"`
+	DevicePixelRatio float64 `json:"devicePixelRatio"`
 	Colors           struct {
-		ButtonPressedBackgroundColor string `json:"buttonPressedBackgroundColor"`
-		ButtonPressedBorderColor     string `json:"buttonPressedBorderColor"`
-		ButtonPressedTextColor       string `json:"buttonPressedTextColor"`
-		DisabledColor                string `json:"disabledColor"`
-		HighlightColor               string `json:"highlightColor"`
-		MouseDownColor               string `json:"mouseDownColor"`
+		ButtonMouseOverBackgroundColor string `json:"buttonMouseOverBackgroundColor"`
+		ButtonPressedBackgroundColor   string `json:"buttonPressedBackgroundColor"`
+		ButtonPressedBorderColor       string `json:"buttonPressedBorderColor"`
+		ButtonPressedTextColor         string `json:"buttonPressedTextColor"`
+		HighlightColor                 string `json:"highlightColor"`
+
+		// Deprecated: no longer part of the registration info.
+		DisabledColor string `json:"disabledColor"`
+
+		// Deprecated: no longer part of the registration info.
+		MouseDownColor string `json:"mouseDownColor"`
 	} `json:"colors"`
 	Devices []struct {
 		ID   string `json:"id"`
@@ -34,11 +47,14 @@ type Info struct {
 }
 
 // register send a registration event to StreamDeck SDK.
-func (s *StreamDeck) register(inRegisterEvent string) error {
-	event := &SendEvent{
+func (s *StreamDeck) register(ctx context.Context, inRegisterEvent string) error {
+	data, err := json.Marshal(&SendEvent{
 		Event: EventName(inRegisterEvent),
 		UUID:  s.UUID,
+	})
+	if err != nil {
+		return fmt.Errorf("encode registration: %w", err)
 	}
 
-	return s.conn.WriteJSON(event)
+	return s.conn.Write(ctx, websocket.MessageText, data)
 }
