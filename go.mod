@@ -1,4 +1,4 @@
-module github.com/Sotalbireo/streamdeck-plugins/sdk-go
+module github.com/Sotalbireo/streamdeck-sdk-go
 
 go 1.27
 

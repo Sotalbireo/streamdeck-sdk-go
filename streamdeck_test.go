@@ -185,6 +185,8 @@ func TestSentCommands(t *testing.T) {
 		{"setState 1", func() { s.SetState("c", 1) }, `{"event":"setState","context":"c","payload":{"state":1}}`},
 		{"setTitle", func() { s.SetTitle("c", "t", Hardware) }, `{"event":"setTitle","context":"c","payload":{"title":"t","target":1}}`},
 		{"setTitle state 0", func() { s.SetTitle("c", "t", HardwareAndSoftware, ForState(0)) }, `{"event":"setTitle","context":"c","payload":{"title":"t","state":0}}`},
+		{"setTitle empty hides the title", func() { s.SetTitle("c", "", HardwareAndSoftware) }, `{"event":"setTitle","context":"c","payload":{"title":""}}`},
+		{"resetTitle", func() { s.ResetTitle("c", Software, ForState(1)) }, `{"event":"setTitle","context":"c","payload":{"target":2,"state":1}}`},
 		{"setImage", func() { s.SetImage("c", "img", ForTarget(Software), ForState(1)) }, `{"event":"setImage","context":"c","payload":{"target":2,"state":1,"image":"img"}}`},
 		{"getSettings", func() { s.GetSettings("c") }, `{"event":"getSettings","context":"c"}`},
 		{"getSettings id", func() { s.GetSettingsWithID("c", "i") }, `{"event":"getSettings","context":"c","id":"i"}`},
@@ -194,17 +196,22 @@ func TestSentCommands(t *testing.T) {
 		{"setSettings nil", func() { s.SetSettings("c", nil) }, `{"event":"setSettings","context":"c","payload":{}}`},
 		{"sendToPropertyInspector", func() { s.SendToPropertyInspector("c", "str") }, `{"event":"sendToPropertyInspector","context":"c","payload":"str"}`},
 		{"setFeedback typed", func() {
-			s.SetFeedback("c", &SendEventSetFeedbackPayload{
+			s.SetFeedback("c", &FeedbackPayload{
 				"title":  "Volume",
 				"value":  42,
-				"bar":    FeedbackItem{Value: 42, Range: &FeedbackRange{Min: 0, Max: 100}, Enabled: new(false), ZOrder: new(0), Opacity: Float64Ptr(0)},
-				"text":   FeedbackItem{Value: "", Font: &FeedbackFont{Size: 16}, TextOverflow: "ellipsis"},
-				"canvas": FeedbackItem{Background: "#000"},
+				"bar":    Bar{Value: Float64Ptr(42), Range: &Range{Min: 0, Max: 100}, Enabled: BoolPtr(false), ZOrder: IntPtr(0), Opacity: Float64Ptr(0)},
+				"text":   Text{Value: StringPtr(""), Font: &Font{Size: 16}, TextOverflow: TextOverflowEllipsis},
+				"canvas": Pixmap{Background: "#000"},
 			})
 		}, `{"event":"setFeedback","context":"c","payload":{"title":"Volume","value":42,
 			"bar":{"value":42,"range":{"min":0,"max":100},"enabled":false,"zOrder":0,"opacity":0},
 			"text":{"value":"","font":{"size":16},"text-overflow":"ellipsis"},
 			"canvas":{"background":"#000"}}}`},
+		{"setFeedbackLayout", func() { s.SetFeedbackLayout("c", IndicatorLayout) }, `{"event":"setFeedbackLayout","context":"c","payload":{"layout":"$B1"}}`},
+		{"setTriggerDescription", func() {
+			s.SetTriggerDescription("c", &SendEventSetTriggerDescriptionPayload{Rotate: "Volume", Push: "Mute"})
+		}, `{"event":"setTriggerDescription","context":"c","payload":{"push":"Mute","rotate":"Volume"}}`},
+		{"setTriggerDescription nil", func() { s.SetTriggerDescription("c", nil) }, `{"event":"setTriggerDescription","context":"c","payload":{}}`},
 		{"setFeedback nil", func() { s.SetFeedback("c", nil) }, `{"event":"setFeedback","context":"c","payload":{}}`},
 		{"switchProfile typed", func() {
 			s.SwitchProfileTo("c", "d", &SendEventSwitchProfilePayload{Profile: "p", Page: new(0)})
@@ -382,5 +389,87 @@ func TestHandlerError_AlertOnlyWithContext(t *testing.T) {
 	msg := readMessage(t, server)
 	if msg["event"] != "showAlert" || msg["context"] != "ctx" {
 		t.Fatalf("first message = %v, want showAlert for ctx", msg)
+	}
+}
+
+// TestStart_DebugDoesNotBlockWriter checks that commands are still sent when the debug mode is on:
+// the writer used to deadlock by sending its own "writer started" log to the channel it consumes.
+func TestStart_DebugDoesNotBlockWriter(t *testing.T) {
+	s, server := startPlugin(t, WithDebug(true))
+
+	s.HandlerFunc(func(e *ReceivedEvent) error {
+		s.SetState(e.Context, 1)
+		return nil
+	})
+
+	go s.StartWithContext(t.Context())
+
+	writeMessage(t, server, `{"event":"keyDown","action":"a","context":"c","device":"d","payload":{"controller":"Keypad"}}`)
+
+	// The debug logs and the command may come in any order.
+	for {
+		m := readMessage(t, server)
+		if m["event"] == "setState" {
+			if m["context"] != "c" {
+				t.Fatalf("unexpected setState: %v", m)
+			}
+
+			return
+		}
+
+		if m["event"] != "logMessage" {
+			t.Fatalf("unexpected message: %v", m)
+		}
+	}
+}
+
+// TestGlobalCommandsUsePluginUUID checks the commands that are not related to an action use the UUID of the plugin
+// as the context, like the official SDK does.
+func TestGlobalCommandsUsePluginUUID(t *testing.T) {
+	s, server := startPlugin(t)
+	go s.StartWithContext(t.Context())
+
+	s.SetGlobalSettings("", map[string]any{"k": "v"})
+	s.GetGlobalSettings("")
+	s.SwitchProfileTo("", "dev", &SendEventSwitchProfilePayload{Profile: "p"})
+	s.SwitchProfile("", "dev", nil)
+	s.GetGlobalSettingsWithID("explicit", "1")
+
+	for _, want := range []string{"plugin-uuid", "plugin-uuid", "plugin-uuid", "plugin-uuid", "explicit"} {
+		if m := readMessage(t, server); m["context"] != want {
+			t.Fatalf("context = %v, want %v (%v)", m["context"], want, m)
+		}
+	}
+}
+
+// TestStart_IgnoresMessageWithoutEvent checks a message that is not an event is reported, not dispatched.
+func TestStart_IgnoresMessageWithoutEvent(t *testing.T) {
+	errs := make(chan error, 2)
+	s, server := startPlugin(t, WithErrorHandler(func(err error) { errs <- err }))
+
+	got := make(chan *ReceivedEvent, 2)
+	s.HandlerFunc(func(e *ReceivedEvent) error {
+		got <- e
+		return nil
+	})
+
+	go s.StartWithContext(t.Context())
+
+	writeMessage(t, server, `{"hello":"world"}`)
+	writeMessage(t, server, `{"event":"systemDidWakeUp"}`)
+
+	select {
+	case e := <-got:
+		if e.Event != SystemDidWakeUp {
+			t.Fatalf("event = %q, want systemDidWakeUp", e.Event)
+		}
+	case <-time.After(testTimeout):
+		t.Fatal("event not received")
+	}
+
+	select {
+	case <-errs:
+	case <-time.After(testTimeout):
+		t.Fatal("unknown message not reported")
 	}
 }

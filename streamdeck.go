@@ -33,7 +33,7 @@ type StreamDeck struct {
 	UUID string
 
 	// Info containing the Stream Deck application information and devices information.
-	Info *Info
+	Info *RegistrationInfo
 
 	conn    *websocket.Conn
 	readCh  chan *ReceivedEvent
@@ -75,7 +75,7 @@ func New(opts ...Option) (*StreamDeck, error) {
 		return nil, ErrMissingPort
 	}
 
-	return connect(fmt.Sprintf("ws://localhost:%d", *port), *pluginUUID, *registerEvent, *info, opts...)
+	return connect(fmt.Sprintf("ws://127.0.0.1:%d", *port), *pluginUUID, *registerEvent, *info, opts...)
 }
 
 // connect validates the registration parameters, opens the WebSocket at url and registers the plugin.
@@ -94,7 +94,7 @@ func connect(url, uuid, regEvent, infoJSON string, opts ...Option) (*StreamDeck,
 	}
 
 	// info json object
-	var r Info
+	var r RegistrationInfo
 	if err := json.Unmarshal([]byte(infoJSON), &r); err != nil {
 		return nil, ErrMissingOrInvalidInfo
 	}
@@ -212,6 +212,12 @@ func (s *StreamDeck) reader(ctx context.Context) {
 			continue
 		}
 
+		// Like the official SDK, ignore a message that is not an event.
+		if event.Event == "" {
+			s.reportError(fmt.Errorf("unknown message: %s", data))
+			continue
+		}
+
 		select {
 		case s.readCh <- &event:
 		case <-ctx.Done():
@@ -231,7 +237,7 @@ func (s *StreamDeck) writer(ctx context.Context) {
 	}()
 
 	if s.debug {
-		s.Log("[DEBUG] writer started")
+		s.logDirect("[DEBUG] writer started")
 	}
 
 	for {
@@ -242,7 +248,7 @@ func (s *StreamDeck) writer(ctx context.Context) {
 			data, err := json.Marshal(event)
 			if err != nil {
 				// An event that cannot be encoded must not stop the plugin.
-				s.reportError(fmt.Errorf("encode event [%s] for action [%s]: %w", event.Event, event.Action, err))
+				s.reportErrorDirect(fmt.Errorf("encode event [%s] for action [%s]: %w", event.Event, event.Action, err))
 				continue
 			}
 
@@ -308,4 +314,26 @@ func (s *StreamDeck) send(event *SendEvent) {
 	case s.writeCh <- event:
 	case <-s.done:
 	}
+}
+
+// logDirect writes a log message without going through the write channel.
+//
+// It is for the writer, which is the only consumer of the channel: sending to the channel from the writer would block it forever.
+func (s *StreamDeck) logDirect(message string) {
+	data, err := json.Marshal(&SendEvent{Event: LogMessage, Payload: &SendEventPayload{Message: message}})
+	if err != nil {
+		return
+	}
+
+	_ = s.write(data)
+}
+
+// reportErrorDirect is reportError for the writer, see logDirect.
+func (s *StreamDeck) reportErrorDirect(err error) {
+	if s.onError != nil {
+		s.onError(err)
+		return
+	}
+
+	s.logDirect(fmt.Sprintf("[ERROR] %v", err))
 }

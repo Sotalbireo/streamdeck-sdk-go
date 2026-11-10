@@ -29,9 +29,19 @@ func (s *StreamDeck) OpenURL(u string) {
 }
 
 // SetTitle tell StreamDeck to dynamically change the title of action with given context.
-// An empty title resets the title to the one set by the user.
+// The title is sent as is: an empty title hides the title, see ResetTitle to restore the title set by the user.
 // Use ForState to change the title of a single state.
 func (s *StreamDeck) SetTitle(context string, title string, target Target, opts ...PayloadOption) {
+	s.setTitle(context, &title, target, opts...)
+}
+
+// ResetTitle tell StreamDeck to restore the title set by the user, of action with given context.
+// Use ForState to reset the title of a single state.
+func (s *StreamDeck) ResetTitle(context string, target Target, opts ...PayloadOption) {
+	s.setTitle(context, nil, target, opts...)
+}
+
+func (s *StreamDeck) setTitle(context string, title *string, target Target, opts ...PayloadOption) {
 	payload := &SendEventPayload{Title: title, Target: target}
 	for _, opt := range opts {
 		opt(payload)
@@ -88,10 +98,10 @@ func (s *StreamDeck) SetTriggerDescription(context string, payload *SendEventSet
 }
 
 // SetFeedback change the feedback of an action with given context.
-// The payload maps the key of a layout item to its new value: a string, a number or a FeedbackItem.
-func (s *StreamDeck) SetFeedback(context string, payload *SendEventSetFeedbackPayload) {
+// The payload maps the key of a layout item to its new value: a string, a number, or a Bar, GBar, Pixmap or Text.
+func (s *StreamDeck) SetFeedback(context string, payload *FeedbackPayload) {
 	if payload == nil {
-		payload = &SendEventSetFeedbackPayload{}
+		payload = &FeedbackPayload{}
 	}
 
 	s.send(&SendEvent{
@@ -141,16 +151,20 @@ func (s *StreamDeck) GetSettingsWithID(context string, id string) {
 	s.send(&SendEvent{Event: GetSettings, Context: context, ID: id})
 }
 
-// SetGlobalSettings change the global settings of an action with given context.
+// SetGlobalSettings change the global settings of the plugin.
+//
+// Stream Deck expects the UUID of the plugin as the context: an empty context means StreamDeck.UUID.
 func (s *StreamDeck) SetGlobalSettings(context string, settings map[string]any) {
 	s.send(&SendEvent{
 		Event:   SetGlobalSettings,
-		Context: context,
+		Context: s.pluginContext(context),
 		Payload: nonNilSettings(settings),
 	})
 }
 
-// GetGlobalSettings get the global settings of an action with given context.
+// GetGlobalSettings get the global settings of the plugin.
+//
+// Stream Deck expects the UUID of the plugin as the context: an empty context means StreamDeck.UUID.
 // Global settings will be sent back to the plugin as a ReceivedEvent with the event name DidReceiveGlobalSettings.
 func (s *StreamDeck) GetGlobalSettings(context string) {
 	s.GetGlobalSettingsWithID(context, "")
@@ -159,7 +173,7 @@ func (s *StreamDeck) GetGlobalSettings(context string) {
 // GetGlobalSettingsWithID is like GetGlobalSettings, the given id is sent back in ReceivedEvent.ID of the response
 // so that it can be told apart from settings changed in the property inspector (Stream Deck 7.1+).
 func (s *StreamDeck) GetGlobalSettingsWithID(context string, id string) {
-	s.send(&SendEvent{Event: GetGlobalSettings, Context: context, ID: id})
+	s.send(&SendEvent{Event: GetGlobalSettings, Context: s.pluginContext(context), ID: id})
 }
 
 // SetResources set the resources of an action with given context (Stream Deck 7.1+).
@@ -191,11 +205,13 @@ func (s *StreamDeck) GetResourcesWithID(context string, id string) {
 // The payload should contain "profile" (string) and optionally "page" (int, 0-indexed).
 // When profile is omitted, Stream Deck switches back to the previous profile.
 //
+// Stream Deck expects the UUID of the plugin as the context: an empty context means StreamDeck.UUID.
+//
 // See SwitchProfileTo for a typed payload.
 func (s *StreamDeck) SwitchProfile(context, device string, payload map[string]any) {
 	event := &SendEvent{
 		Event:   SwitchToProfile,
-		Context: context,
+		Context: s.pluginContext(context),
 		Device:  device,
 	}
 
@@ -214,4 +230,14 @@ func nonNilSettings(settings map[string]any) map[string]any {
 	}
 
 	return settings
+}
+
+// pluginContext returns the context for the commands that are not related to an action instance
+// (global settings, profiles): Stream Deck expects the UUID of the plugin.
+func (s *StreamDeck) pluginContext(context string) string {
+	if context == "" {
+		return s.UUID
+	}
+
+	return context
 }

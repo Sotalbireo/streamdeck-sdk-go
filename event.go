@@ -159,52 +159,52 @@ const (
 	SendToPropertyInspector EventName = "sendToPropertyInspector"
 )
 
-// Device used with StreamDeck.
-// See [DeviceType](https://docs.elgato.com/streamdeck/sdk/guides/devices).
-type Device uint8
+// DeviceType is the type of a device.
+// See [Devices](https://docs.elgato.com/streamdeck/sdk/guides/devices).
+type DeviceType uint8
 
 const (
-	// KESDSDKDeviceTypeStreamDeck Device type: Stream Deck (including Stream Deck Scissor Keys).
-	KESDSDKDeviceTypeStreamDeck Device = iota
+	// DeviceTypeStreamDeck Device type: Stream Deck (including Stream Deck Scissor Keys).
+	DeviceTypeStreamDeck DeviceType = iota
 
-	// KESDSDKDeviceTypeStreamDeckMini Device type: Stream Deck Mini.
-	KESDSDKDeviceTypeStreamDeckMini
+	// DeviceTypeStreamDeckMini Device type: Stream Deck Mini.
+	DeviceTypeStreamDeckMini
 
-	// KESDSDKDeviceTypeStreamDeckXL Device type: Stream Deck XL.
-	KESDSDKDeviceTypeStreamDeckXL
+	// DeviceTypeStreamDeckXL Device type: Stream Deck XL.
+	DeviceTypeStreamDeckXL
 
-	// KESDSDKDeviceTypeStreamDeckMobile Device type: Stream Deck Mobile.
-	KESDSDKDeviceTypeStreamDeckMobile
+	// DeviceTypeStreamDeckMobile Device type: Stream Deck Mobile.
+	DeviceTypeStreamDeckMobile
 
-	// KESDSDKDeviceTypeCorsairGKeys Device type: Corsair G-Keys.
-	KESDSDKDeviceTypeCorsairGKeys
+	// DeviceTypeCorsairGKeys Device type: Corsair G-Keys.
+	DeviceTypeCorsairGKeys
 
-	// KESDSDKDeviceTypeStreamDeckPedal Device type: Stream Deck Pedal.
-	KESDSDKDeviceTypeStreamDeckPedal
+	// DeviceTypeStreamDeckPedal Device type: Stream Deck Pedal.
+	DeviceTypeStreamDeckPedal
 
-	// KESDSDKDeviceTypeCorsairVoyager Device type: Corsair Voyager.
-	KESDSDKDeviceTypeCorsairVoyager
+	// DeviceTypeCorsairVoyager Device type: Corsair Voyager.
+	DeviceTypeCorsairVoyager
 
-	// KESDSDKDeviceTypeStreamDeckPlus Device type: Stream Deck +.
-	KESDSDKDeviceTypeStreamDeckPlus
+	// DeviceTypeStreamDeckPlus Device type: Stream Deck +.
+	DeviceTypeStreamDeckPlus
 
-	// KESDSDKDeviceTypeSCUFController Device type: SCUF Controller.
-	KESDSDKDeviceTypeSCUFController
+	// DeviceTypeSCUFController Device type: SCUF Controller.
+	DeviceTypeSCUFController
 
-	// KESDSDKDeviceTypeStreamDeckNeo Device type: Stream Deck Neo.
-	KESDSDKDeviceTypeStreamDeckNeo
+	// DeviceTypeStreamDeckNeo Device type: Stream Deck Neo.
+	DeviceTypeStreamDeckNeo
 
-	// KESDSDKDeviceTypeStreamDeckStudio Device type: Stream Deck Studio.
-	KESDSDKDeviceTypeStreamDeckStudio
+	// DeviceTypeStreamDeckStudio Device type: Stream Deck Studio.
+	DeviceTypeStreamDeckStudio
 
-	// KESDSDKDeviceTypeVirtualStreamDeck Device type: Virtual Stream Deck.
-	KESDSDKDeviceTypeVirtualStreamDeck
+	// DeviceTypeVirtualStreamDeck Device type: Virtual Stream Deck.
+	DeviceTypeVirtualStreamDeck
 
-	// KESDSDKDeviceTypeGalleon100SD Device type: Galleon 100 SD.
-	KESDSDKDeviceTypeGalleon100SD
+	// DeviceTypeGalleon100SD Device type: Galleon 100 SD.
+	DeviceTypeGalleon100SD
 
-	// KESDSDKDeviceTypeStreamDeckPlusXL Device type: Stream Deck + XL.
-	KESDSDKDeviceTypeStreamDeckPlusXL
+	// DeviceTypeStreamDeckPlusXL Device type: Stream Deck + XL.
+	DeviceTypeStreamDeckPlusXL
 )
 
 // Controller used with StreamDeck.
@@ -219,12 +219,76 @@ const (
 
 	// Neo is a Stream Deck Neo infobar (Stream Deck 7.6+).
 	Neo Controller = "Neo"
-
-	// KeyPad is the former spelling of Keypad.
-	//
-	// Deprecated: use Keypad, which has the value sent by Stream Deck.
-	KeyPad = Keypad
 )
+
+// Size is the number of columns and rows of keys that a device owns.
+type Size struct {
+	Columns uint8 `json:"columns"`
+	Rows    uint8 `json:"rows"`
+}
+
+// DeviceInfo is the information about a device.
+type DeviceInfo struct {
+	// The name of the device set by the user.
+	Name string `json:"name"`
+
+	// The number of columns and rows of keys that the device owns.
+	Size Size `json:"size"`
+
+	// Type of device.
+	Type DeviceType `json:"type"`
+}
+
+// Coordinates is the position of an action on a device.
+type Coordinates struct {
+	Column uint8 `json:"column"`
+	Row    uint8 `json:"row"`
+}
+
+// FontStyle is the style of the font of a title.
+type FontStyle string
+
+const (
+	// FontStyleNone is the font style when none is set.
+	FontStyleNone FontStyle = ""
+
+	// FontStyleBoldItalic is the bold italic font style.
+	FontStyleBoldItalic FontStyle = "Bold Italic"
+
+	// FontStyleBold is the bold font style.
+	FontStyleBold FontStyle = "Bold"
+
+	// FontStyleItalic is the italic font style.
+	FontStyleItalic FontStyle = "Italic"
+
+	// FontStyleRegular is the regular font style.
+	FontStyleRegular FontStyle = "Regular"
+)
+
+// TitleAlignment is the alignment of a title.
+type TitleAlignment string
+
+const (
+	// TitleAlignmentBottom aligns the title to the bottom.
+	TitleAlignmentBottom TitleAlignment = "bottom"
+
+	// TitleAlignmentMiddle aligns the title to the middle.
+	TitleAlignmentMiddle TitleAlignment = "middle"
+
+	// TitleAlignmentTop aligns the title to the top.
+	TitleAlignmentTop TitleAlignment = "top"
+)
+
+// TitleParameters describes the parameters of a title. Used on events: titleParametersDidChange
+type TitleParameters struct {
+	FontFamily     string         `json:"fontFamily"`
+	FontSize       int            `json:"fontSize"`
+	FontStyle      FontStyle      `json:"fontStyle"`
+	FontUnderline  bool           `json:"fontUnderline"`
+	ShowTitle      bool           `json:"showTitle"`
+	TitleAlignment TitleAlignment `json:"titleAlignment"`
+	TitleColor     string         `json:"titleColor"`
+}
 
 // Layouts used with StreamDeck.
 const (
@@ -275,19 +339,7 @@ type ReceivedEvent struct {
 	ID string `json:"id"`
 
 	// A json object containing information about the device. Used on deviceDidConnect, deviceDidChange
-	DeviceInfo struct {
-		// The name of the device set by the user.
-		Name string `json:"name"`
-
-		// Type of device.
-		Type Device `json:"type"`
-
-		// The number of columns and rows of keys that the device owns.
-		Size struct {
-			Columns uint8 `json:"columns"`
-			Rows    uint8 `json:"rows"`
-		} `json:"size"`
-	} `json:"deviceInfo"`
+	DeviceInfo DeviceInfo `json:"deviceInfo"`
 
 	// A json object containing context about received event.
 	//
@@ -357,10 +409,7 @@ type ReceivedEventPayload struct {
 	Controller Controller `json:"controller"`
 
 	// The coordinates of the action triggered.
-	Coordinates struct {
-		Column uint8 `json:"column"`
-		Row    uint8 `json:"row"`
-	} `json:"coordinates"`
+	Coordinates Coordinates `json:"coordinates"`
 
 	// The array which holds (x, y) coordinates as a position of tap inside of LCD slot associated with action.
 	// Used on events: touchTap
@@ -379,31 +428,23 @@ type ReceivedEventPayload struct {
 	// Used on events: dialRotate
 	Pressed bool `json:"pressed"`
 
-	// This is a parameter that is only set when the action has multiple states defined in its manifest.json.
-	// The 0-based value contains the current state of the action.
-	State uint8 `json:"state"`
+	// The 0-based state of the action. It is nil when the payload has no state (the action has a single state),
+	// which is different from the first state (0).
+	State *uint8 `json:"state"`
 
 	// Boolean indicating if the action is inside a Multi Action.
 	IsInMultiAction bool `json:"isInMultiAction"`
 
-	// This is a parameter that is only set when the action is triggered with a specific value from a Multi Action.
+	// It is only set (not nil) when the action is triggered with a specific value from a Multi Action (keyDown, keyUp).
 	// For example if the user sets the Game Capture Record action to be disabled in a Multi Action, you would see the value 1.
 	// Only the value 0 and 1 are valid.
-	UserDesiredState uint8 `json:"userDesiredState"`
+	UserDesiredState *uint8 `json:"userDesiredState"`
 
 	// The new title. Used on events: titleParametersDidChange
 	Title string `json:"title"`
 
 	// A json object describing the new title parameters. Used on events: titleParametersDidChange
-	TitleParameters struct {
-		FontFamily     string `json:"fontFamily"`
-		FontSize       int    `json:"fontSize"`
-		FontStyle      string `json:"fontStyle"`
-		FontUnderline  bool   `json:"fontUnderline"`
-		ShowTitle      bool   `json:"showTitle"`
-		TitleAlignment string `json:"titleAlignment"`
-		TitleColor     string `json:"titleColor"`
-	} `json:"titleParameters"`
+	TitleParameters TitleParameters `json:"titleParameters"`
 
 	// The identifier of the application that has been launched.
 	// Used on events: applicationDidLaunch, applicationDidTerminate
@@ -468,9 +509,10 @@ type SendEventPayload struct {
 	// Used on events: logMessage
 	Message string `json:"message,omitempty"`
 
-	// The title to display. If there is no title parameter, the title is reset to the title set by the user.
+	// The title to display. When nil, the title is reset to the title set by the user; an empty title is sent as is
+	// and hides the title.
 	// Used on events: setTitle
-	Title string `json:"title,omitempty"`
+	Title *string `json:"title,omitempty"`
 
 	// Specify where you want to display the title.
 	// Used on events: setTitle, setImage
@@ -512,9 +554,6 @@ type SendEventSetTriggerDescriptionPayload struct {
 	// When undefined the description will be hidden.
 	Touch string `json:"touch,omitempty"`
 }
-
-// SendEventSetFeedbackPayload describes a payload for setFeedback event to send to StreamDeck SDK.
-type SendEventSetFeedbackPayload map[string]any
 
 // SendEventSetFeedbackLayoutPayload describes a payload for setFeedbackLayout event to send to StreamDeck SDK.
 type SendEventSetFeedbackLayoutPayload struct {

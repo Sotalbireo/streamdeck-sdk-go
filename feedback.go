@@ -1,19 +1,85 @@
 package sdk
 
-// FeedbackItem describes the properties of an item of a layout of the Stream Deck + touch display,
-// for use as a value of SendEventSetFeedbackPayload.
-// See [Layouts](https://docs.elgato.com/streamdeck/sdk/references/layouts).
+// FeedbackPayload is the payload of SetFeedback: it maps the key of an item of the layout
+// to its new value, which is a string, a number, or one of Bar, GBar, Pixmap and Text.
+// See [SetFeedback](https://docs.elgato.com/streamdeck/sdk/references/websocket/plugin#setfeedback).
+type FeedbackPayload map[string]any
+
+// BarSubType is the shape of a Bar or a GBar.
+type BarSubType uint8
+
+const (
+	// BarSubTypeRectangle is a rectangle.
+	BarSubTypeRectangle BarSubType = iota
+
+	// BarSubTypeDoubleRectangle is a double rectangle.
+	BarSubTypeDoubleRectangle
+
+	// BarSubTypeTrapezoid is a trapezoid.
+	BarSubTypeTrapezoid
+
+	// BarSubTypeDoubleTrapezoid is a double trapezoid.
+	BarSubTypeDoubleTrapezoid
+
+	// BarSubTypeGroove is a groove.
+	BarSubTypeGroove
+)
+
+// Alignment is the alignment of the text of a Text item.
+type Alignment string
+
+const (
+	// AlignmentCenter centers the text.
+	AlignmentCenter Alignment = "center"
+
+	// AlignmentLeft aligns the text to the left.
+	AlignmentLeft Alignment = "left"
+
+	// AlignmentRight aligns the text to the right.
+	AlignmentRight Alignment = "right"
+)
+
+// TextOverflow is how the text of a Text item is shortened when it does not fit.
+type TextOverflow string
+
+const (
+	// TextOverflowClip clips the text.
+	TextOverflowClip TextOverflow = "clip"
+
+	// TextOverflowEllipsis ends the text with an ellipsis.
+	TextOverflowEllipsis TextOverflow = "ellipsis"
+
+	// TextOverflowFade fades out the end of the text.
+	TextOverflowFade TextOverflow = "fade"
+)
+
+// Range is the minimum and the maximum value of a Bar or a GBar.
+type Range struct {
+	Min float64 `json:"min"`
+	Max float64 `json:"max"`
+}
+
+// Font is the font of a Text item.
+type Font struct {
+	// Size of the font.
+	Size int `json:"size,omitempty"`
+
+	// Weight of the font.
+	Weight int `json:"weight,omitempty"`
+}
+
+// The layout items below are the values of a FeedbackPayload, see
+// [Layouts](https://docs.elgato.com/streamdeck/sdk/references/layouts).
 //
 // All the properties are optional and only the ones that are set are sent,
 // so that the other properties of the item are left unchanged.
-// Properties that are meaningful when zero (Enabled, Opacity, ZOrder, BorderWidth, Range...)
-// are pointers, see BoolPtr, IntPtr and Float64Ptr.
-//
-// The Value is either a string or a number, depending on the type of the item:
-// text of a text item, base64 image or path of a pixmap item, current value of a bar item.
-type FeedbackItem struct {
-	// Value of the item. It is not sent when nil, an empty string is sent.
-	Value any `json:"value,omitempty"`
+// Properties that are meaningful when zero (Enabled, Opacity, ZOrder, Value...) are pointers,
+// see BoolPtr, IntPtr, Float64Ptr and StringPtr.
+
+// Bar is a bar item.
+type Bar struct {
+	// Background of the item: a color, or a gradient.
+	Background string `json:"background,omitempty"`
 
 	// Enabled shows or hides the item.
 	Enabled *bool `json:"enabled,omitempty"`
@@ -24,60 +90,78 @@ type FeedbackItem struct {
 	// ZOrder is the stacking order of the item.
 	ZOrder *int `json:"zOrder,omitempty"`
 
-	// Background is the background of the item: a color, or a gradient.
-	Background string `json:"background,omitempty"`
+	// BarBackgroundColor is the background color of the bar (bar_bg_c).
+	BarBackgroundColor string `json:"bar_bg_c,omitempty"`
 
-	// Text items.
+	// BarBorderColor is the border color of the bar (bar_border_c).
+	BarBorderColor string `json:"bar_border_c,omitempty"`
 
-	// Alignment of the text: "left", "center" or "right".
-	Alignment string `json:"alignment,omitempty"`
+	// BarFillColor is the fill color of the bar (bar_fill_c).
+	BarFillColor string `json:"bar_fill_c,omitempty"`
+
+	// BorderWidth is the width of the border of the bar (border_w).
+	BorderWidth *int `json:"border_w,omitempty"`
+
+	// Range is the minimum and the maximum value of the bar.
+	Range *Range `json:"range,omitempty"`
+
+	// Subtype is the shape of the bar.
+	Subtype *BarSubType `json:"subtype,omitempty"`
+
+	// Value is the current value of the bar.
+	Value *float64 `json:"value,omitempty"`
+}
+
+// GBar is a gradient bar item: a Bar with a height.
+type GBar struct {
+	Background         string      `json:"background,omitempty"`
+	Enabled            *bool       `json:"enabled,omitempty"`
+	Opacity            *float64    `json:"opacity,omitempty"`
+	ZOrder             *int        `json:"zOrder,omitempty"`
+	BarBackgroundColor string      `json:"bar_bg_c,omitempty"`
+	BarBorderColor     string      `json:"bar_border_c,omitempty"`
+	BarFillColor       string      `json:"bar_fill_c,omitempty"`
+	BorderWidth        *int        `json:"border_w,omitempty"`
+	Range              *Range      `json:"range,omitempty"`
+	Subtype            *BarSubType `json:"subtype,omitempty"`
+	Value              *float64    `json:"value,omitempty"`
+
+	// BarHeight is the height of the bar (bar_h).
+	BarHeight *int `json:"bar_h,omitempty"`
+}
+
+// Pixmap is an image item.
+type Pixmap struct {
+	Background string   `json:"background,omitempty"`
+	Enabled    *bool    `json:"enabled,omitempty"`
+	Opacity    *float64 `json:"opacity,omitempty"`
+	ZOrder     *int     `json:"zOrder,omitempty"`
+
+	// Value is the image: a base64 encoded image, or a path to an image file.
+	Value *string `json:"value,omitempty"`
+}
+
+// Text is a text item.
+type Text struct {
+	Background string   `json:"background,omitempty"`
+	Enabled    *bool    `json:"enabled,omitempty"`
+	Opacity    *float64 `json:"opacity,omitempty"`
+	ZOrder     *int     `json:"zOrder,omitempty"`
+
+	// Alignment of the text.
+	Alignment Alignment `json:"alignment,omitempty"`
 
 	// Color of the text.
 	Color string `json:"color,omitempty"`
 
 	// Font of the text.
-	Font *FeedbackFont `json:"font,omitempty"`
+	Font *Font `json:"font,omitempty"`
 
-	// TextOverflow is how the text is shortened: "clip", "ellipsis" or "fade".
-	TextOverflow string `json:"text-overflow,omitempty"`
+	// TextOverflow is how the text is shortened (text-overflow).
+	TextOverflow TextOverflow `json:"text-overflow,omitempty"`
 
-	// Bar items.
-
-	// BarBackgroundColor is the background color of the bar.
-	BarBackgroundColor string `json:"bar_bg_c,omitempty"`
-
-	// BarBorderColor is the border color of the bar.
-	BarBorderColor string `json:"bar_border_c,omitempty"`
-
-	// BarFillColor is the fill color of the bar.
-	BarFillColor string `json:"bar_fill_c,omitempty"`
-
-	// BarHeight is the height of the bar.
-	BarHeight *int `json:"bar_h,omitempty"`
-
-	// BorderWidth is the width of the border of the bar.
-	BorderWidth *int `json:"border_w,omitempty"`
-
-	// Range is the minimum and the maximum value of the bar.
-	Range *FeedbackRange `json:"range,omitempty"`
-
-	// Subtype is the shape of the bar, from 0 to 4.
-	Subtype *int `json:"subtype,omitempty"`
-}
-
-// FeedbackFont describes the font of a text item.
-type FeedbackFont struct {
-	// Size of the font.
-	Size int `json:"size,omitempty"`
-
-	// Weight of the font.
-	Weight int `json:"weight,omitempty"`
-}
-
-// FeedbackRange is the range of the values of a bar item.
-type FeedbackRange struct {
-	Min float64 `json:"min"`
-	Max float64 `json:"max"`
+	// Value is the text. It is a pointer so that an empty text can be sent.
+	Value *string `json:"value,omitempty"`
 }
 
 // BoolPtr returns a pointer to b.
@@ -88,6 +172,12 @@ func IntPtr(i int) *int { return new(i) }
 
 // Float64Ptr returns a pointer to f.
 func Float64Ptr(f float64) *float64 { return new(f) }
+
+// StringPtr returns a pointer to s.
+func StringPtr(s string) *string { return new(s) }
+
+// BarSubTypePtr returns a pointer to t.
+func BarSubTypePtr(t BarSubType) *BarSubType { return new(t) }
 
 // SendEventSwitchProfilePayload describes a payload for switchToProfile event to send to StreamDeck SDK.
 type SendEventSwitchProfilePayload struct {
@@ -102,10 +192,11 @@ type SendEventSwitchProfilePayload struct {
 
 // SwitchProfileTo switches to a pre-defined profile distributed with the plugin on the specified device.
 // A nil payload switches back to the previous profile.
+// Stream Deck expects the UUID of the plugin as the context: an empty context means StreamDeck.UUID.
 func (s *StreamDeck) SwitchProfileTo(context, device string, payload *SendEventSwitchProfilePayload) {
 	event := &SendEvent{
 		Event:   SwitchToProfile,
-		Context: context,
+		Context: s.pluginContext(context),
 		Device:  device,
 	}
 
